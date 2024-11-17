@@ -1,0 +1,19 @@
+[package]
+name = "korobok"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "libkorobok"
+path = "src/lib.rs"
+
+[[bin]]
+name = "korobok"
+path = "src/korobok.rs"
+
+[dependencies]
+anyhow = "1.0.93"
+clone3 = "0.2.3"
+interprocess = "2.2.1"
+libc = "0.2.162"
+sys-mount = "3.0.1"
