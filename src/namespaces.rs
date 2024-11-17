@@ -2,7 +2,7 @@ use crate::options::RunOptions as Options;
 use crate::syscall;
 use anyhow::{Context, Result};
 use std::env::{self, remove_var, set_current_dir, set_var};
-use std::fs::{DirBuilder, File};
+use std::fs::{remove_dir, DirBuilder, File};
 use std::io::{ErrorKind, Write};
 use std::os::unix::fs::DirBuilderExt;
 use sys_mount::{unmount, Mount, MountFlags, UnmountFlags};
@@ -71,6 +71,8 @@ pub unsafe fn prepare_mnt_ns(opts: &Options) -> Result<()> {
 
     unmount("put_old", UnmountFlags::DETACH)
         .with_context(|| "[container] Could not unmount `put_old`")?;
+
+    remove_dir("put_old").with_context(|| "[container] Could not remove `put_old`")?;
 
     if opts.unset_env_vars {
         for (name, _val) in env::vars() {

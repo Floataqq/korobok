@@ -5,6 +5,8 @@ pub struct RunOptions {
     pub isolate_mnt: bool,
     pub isolate_uts: bool,
     pub isolate_user: bool,
+    pub isolate_net: bool,
+    pub isolate_ipc: bool,
     // pub isolate_pid: bool,
     pub unset_env_vars: bool,
     pub env: Vec<(String, String)>,

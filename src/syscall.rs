@@ -1,6 +1,6 @@
 use anyhow::Result;
 use libc;
-use std::{env::current_dir, error::Error, ffi::CString, fmt::Display};
+use std::{error::Error, ffi::CString, fmt::Display};
 
 #[derive(Debug)]
 pub struct SyscallError {

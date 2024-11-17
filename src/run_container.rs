@@ -82,6 +82,12 @@ pub fn run_container(opts: &Options, cmd: &[String]) -> Result<()> {
         clone3.flag_newns();
         clone3.flag_newpid();
     }
+    if opts.isolate_net {
+        clone3.flag_newnet();
+    }
+    if opts.isolate_ipc {
+        clone3.flag_newipc();
+    }
 
     let (p_tx, c_rx) = pipe().with_context(|| "Could not create IPC pipe")?;
     let (c_tx, p_rx) = pipe().with_context(|| "Could not create IPC pipe")?;
