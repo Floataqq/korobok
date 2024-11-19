@@ -1,8 +1,9 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::parser::{EnvPolicy, FsPolicy, GlobalOptions, NetPolicy, RunData, UtsPolicy};
-use anyhow::{Context, Result};
+use crate::parser::{EnvPolicy, FsPolicy, GlobalOptions, NetPolicy, RunData, UsrPolicy, UtsPolicy};
+use anyhow::{anyhow, Context, Result};
+use libc::{getegid, geteuid};
 use libkorobok::options::RunOptions as Options;
 use libkorobok::run_container;
 use std::process::Command;
@@ -25,8 +26,8 @@ pub fn run(run_data: RunData, global_opts: GlobalOptions) -> Result<()> {
 
     let mut opts = Options {
         container_mount_point: "".to_string(),
-        uid_map: "0 1000 1".to_string(),
-        gid_map: "0 1000 1".to_string(),
+        uid_map: "".to_string(),
+        gid_map: "".to_string(),
         isolate_mnt: true,
         isolate_uts: true,
         isolate_net: true,
@@ -35,6 +36,22 @@ pub fn run(run_data: RunData, global_opts: GlobalOptions) -> Result<()> {
         env: vec![],
         unset_env_vars: true,
     };
+
+    match run_data.usr {
+        UsrPolicy::Root => {
+            let euid = unsafe { geteuid() };
+            let egid = unsafe { getegid() };
+            opts.uid_map = format!("0 {euid} 1");
+            opts.gid_map = format!("0 {egid} 1");
+        }
+    }
+
+    if let Some(uid_map) = run_data.uid_map {
+        opts.uid_map = uid_map;
+    }
+    if let Some(gid_map) = run_data.gid_map {
+        opts.gid_map = gid_map;
+    }
 
     if run_data.env == EnvPolicy::Preserve {
         opts.unset_env_vars = false;
@@ -60,13 +77,11 @@ pub fn run(run_data: RunData, global_opts: GlobalOptions) -> Result<()> {
                     let image = run_data.image.with_context(|| {
                         "You can't use --fs=run-copy (default value) without passing the image argument!"
                     })?;
-                    let e1 = io::Error::new(io::ErrorKind::InvalidData, "Could not get image path");
-                    let e2 = io::Error::new(io::ErrorKind::InvalidData, "Could not get image path");
                     let imgpath = Path::new(&image)
                         .file_name()
-                        .ok_or(e1)?
+                        .ok_or(anyhow!("Could not get image path"))?
                         .to_str()
-                        .ok_or(e2)?;
+                        .ok_or(anyhow!("Could not get image path"))?;
                     opts.container_mount_point = rd
                         .path()
                         .join(imgpath)

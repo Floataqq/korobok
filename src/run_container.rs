@@ -51,13 +51,15 @@ unsafe fn container_main(opts: &Options, cmd: &[String], tx: OwnedFd, rx: OwnedF
     libc::setuid(0);
     libc::setgid(0);
 
-    Command::new(&cmd[0])
-        .args(&cmd[1..])
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .output()
-        .with_context(|| "[container] Could not run entry command")?;
+    if opts.isolate_net {
+        Command::new(&cmd[0])
+            .args(&cmd[1..])
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .output()
+            .with_context(|| "[container] Could not run entry command")?;
+    }
 
     tx.write_all(b"finish\n")
         .with_context(|| "[container] Could not send finish message to setup")?;

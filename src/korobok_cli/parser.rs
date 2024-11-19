@@ -42,6 +42,16 @@ pub struct RunData {
     #[clap(long, default_value_t = FsPolicy::RunCopy)]
     #[arg(value_enum)]
     pub fs: FsPolicy,
+    #[clap(long)]
+    /// Raw uid_map that is passed into container (overrides --usr)
+    pub uid_map: Option<String>,
+    #[clap(long)]
+    /// Raw gid_map that is passed into container (overrides --usr)
+    pub gid_map: Option<String>,
+    #[clap(long, default_value_t = UsrPolicy::Root)]
+    #[arg(value_enum)]
+    /// Control how users are mapped from host to container
+    pub usr: UsrPolicy,
     /// Path to a directory containing container rootfs
     pub image: Option<String>,
     /// Command to run in container (better to pass after --)
@@ -80,4 +90,10 @@ pub enum FsPolicy {
     Run,
     /// Run the container in the host filesystem
     Host,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum UsrPolicy {
+    /// Map effective UID&GID to root in container
+    Root,
 }
