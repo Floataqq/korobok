@@ -10,4 +10,5 @@ pub struct RunOptions {
     // pub isolate_pid: bool,
     pub unset_env_vars: bool,
     pub env: Vec<(String, String)>,
+    pub detach: bool,
 }

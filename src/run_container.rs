@@ -51,12 +51,17 @@ unsafe fn container_main(opts: &Options, cmd: &[String], tx: OwnedFd, rx: OwnedF
     libc::setuid(0);
     libc::setgid(0);
 
+    let stdio_mode = if opts.detach {
+        (Stdio::piped(), Stdio::piped(), Stdio::piped())
+    } else {
+        (Stdio::inherit(), Stdio::inherit(), Stdio::inherit())
+    };
     if opts.isolate_net {
         Command::new(&cmd[0])
             .args(&cmd[1..])
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+            .stdin(stdio_mode.0)
+            .stdout(stdio_mode.1)
+            .stderr(stdio_mode.2)
             .output()
             .with_context(|| "[container] Could not run entry command")?;
     }

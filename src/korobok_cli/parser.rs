@@ -1,6 +1,6 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 #[clap(name = "korobok", version)]
 pub struct KorobokOptions {
     #[clap(flatten)]
@@ -10,7 +10,7 @@ pub struct KorobokOptions {
     pub command: Command,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, Args, Clone)]
 pub struct GlobalOptions {
     #[clap(long)]
     /// Specify where container rootfs is copied (if it is copied at all).
@@ -19,13 +19,13 @@ pub struct GlobalOptions {
     pub run_dir: Option<String>,
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Debug, Subcommand, Clone)]
 pub enum Command {
     /// Create a container and run a command inside of it
     Run(RunData),
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, Args, Clone)]
 pub struct RunData {
     #[clap(long, default_value_t = EnvPolicy::Clear)]
     #[arg(value_enum)]
@@ -39,7 +39,7 @@ pub struct RunData {
     #[arg(value_enum)]
     /// Control whether the container can acces AND ALTER hostname settings of the host machine
     pub uts: UtsPolicy,
-    #[clap(long, default_value_t = FsPolicy::RunCopy)]
+    #[clap(long, default_value_t = FsPolicy::Copy)]
     #[arg(value_enum)]
     pub fs: FsPolicy,
     #[clap(long)]
@@ -56,6 +56,15 @@ pub struct RunData {
     pub image: Option<String>,
     /// Command to run in container (better to pass after --)
     pub cmd: Vec<String>,
+    #[clap(short = 'e')]
+    /// Pass is a VARNAME:VALUE pair after it to set environment variables. Can be used multiple
+    /// times:
+    ///
+    /// korobok run -e "KEY1:VALUE1" -e "KEY2:VALUE2" container_fs sh
+    pub environment: Vec<String>,
+    #[clap(long)]
+    /// Do not detach stdout, stdin and stderr (this will not print the container id)
+    pub no_detach: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -85,9 +94,9 @@ pub enum UtsPolicy {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum FsPolicy {
     /// Copy the container rootfs to a separate location and run everything there
-    RunCopy,
+    Copy,
     /// Run the container in the provided directory
-    Run,
+    NoCopy,
     /// Run the container in the host filesystem
     Host,
 }

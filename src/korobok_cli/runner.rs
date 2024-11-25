@@ -1,13 +1,11 @@
-use std::io;
-use std::path::{Path, PathBuf};
-
 use crate::parser::{EnvPolicy, FsPolicy, GlobalOptions, NetPolicy, RunData, UsrPolicy, UtsPolicy};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use libc::{getegid, geteuid};
+use libkorobok::container_dir::ContainerDir;
 use libkorobok::options::RunOptions as Options;
 use libkorobok::run_container;
+use std::path::Path;
 use std::process::Command;
-use tempdir::TempDir;
 
 fn prepare_container_rootfs(rd: &Path, image: &str) -> Result<()> {
     Command::new("cp")
@@ -19,11 +17,36 @@ fn prepare_container_rootfs(rd: &Path, image: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn run(run_data: RunData, global_opts: GlobalOptions) -> Result<()> {
-    // ugly scope hack :(
-    let rd = TempDir::new("korobok_container")
-        .with_context(|| "Could not create tempdir to deplay container in")?;
+fn run_in_dir(
+    root_dir: &str,
+    cmd: &[String],
+    opts: &mut Options,
+    image: Option<String>,
+) -> Result<String> {
+    let image = image.clone().with_context(|| {
+        "You can't use --fs=run-copy (default value) without passing the image argument!"
+    })?;
+    let mut d = ContainerDir::new(root_dir)
+        .with_context(|| "Could not create container runtime directory")?;
+    prepare_container_rootfs(d.as_ref(), &image)
+        .with_context(|| "Could not prepare container rootfs")?;
+    let imgpath = Path::new(&image)
+        .file_name()
+        .with_context(|| "Could not get image path")?
+        .to_str()
+        .with_context(|| "Could not convert image path to string")?;
+    opts.container_mount_point = d
+        .as_ref()
+        .join(imgpath)
+        .to_str()
+        .with_context(|| "Could not crate container mount point path")?
+        .to_owned();
+    run_container(&opts, cmd).with_context(|| "Could not run the container")?;
+    let _ = d.close();
+    Ok(d.id.clone())
+}
 
+pub fn run(run_data: RunData, global_opts: GlobalOptions) -> Result<String> {
     let mut opts = Options {
         container_mount_point: "".to_string(),
         uid_map: "".to_string(),
@@ -33,8 +56,17 @@ pub fn run(run_data: RunData, global_opts: GlobalOptions) -> Result<()> {
         isolate_net: true,
         isolate_ipc: true,
         isolate_user: true,
-        env: vec![],
+        env: run_data
+            .environment
+            .into_iter()
+            .map(|e| {
+                let kv: Vec<&str> = e.split(":").collect();
+                assert!(kv.len() == 2, "Invalid env arg: {e}");
+                (kv[0].to_owned(), kv[1].to_owned())
+            })
+            .collect(),
         unset_env_vars: true,
+        detach: !run_data.no_detach,
     };
 
     match run_data.usr {
@@ -62,54 +94,35 @@ pub fn run(run_data: RunData, global_opts: GlobalOptions) -> Result<()> {
     if run_data.net == NetPolicy::Host {
         opts.isolate_net = false;
     }
-    match run_data.fs {
+
+    let cmd = run_data.cmd.as_slice();
+    let id = match run_data.fs {
         FsPolicy::Host => {
             opts.isolate_mnt = false;
+            run_container(&opts, cmd).with_context(|| "Could not run the container")?;
+            None
         }
-        FsPolicy::Run => {
+        FsPolicy::NoCopy => {
             opts.container_mount_point = run_data
                 .image
                 .with_context(|| "You can't use --fs=run without passing the image argument!")?;
+            run_container(&opts, cmd).with_context(|| "Could not run the container")?;
+            None
         }
-        FsPolicy::RunCopy => {
-            match global_opts.run_dir {
-                None => {
-                    let image = run_data.image.with_context(|| {
-                        "You can't use --fs=run-copy (default value) without passing the image argument!"
-                    })?;
-                    let imgpath = Path::new(&image)
-                        .file_name()
-                        .ok_or(anyhow!("Could not get image path"))?
-                        .to_str()
-                        .ok_or(anyhow!("Could not get image path"))?;
-                    opts.container_mount_point = rd
-                        .path()
-                        .join(imgpath)
-                        .to_str()
-                        .with_context(|| {
-                            "Could not turn container rootfs path to str when mounting in tempdir"
-                        })?
-                        .to_owned();
-                    prepare_container_rootfs(rd.path(), &image)
-                        .with_context(|| "Could not prepare container rootfs")?;
-                }
-                Some(_rd) => {
-                    panic!("You can't yet set runtime directories, but it will be available in the future");
-                    /*
-                    let rd = Path::new(&rd);
-                    let image = run_data.image.with_context(|| {
-                        "You can't use --fs=run-copy (default value) without passing the image argument!"
-                    })?;
-                    prepare_container_rootfs(rd, &image)
-                        .with_context(|| "Could not prepare container rootfs")?;
-                    */
-                }
-            }
-        }
+        FsPolicy::Copy => match global_opts.run_dir {
+            None => Some(run_in_dir(
+                "/tmp/korobok/",
+                &cmd,
+                &mut opts,
+                run_data.image,
+            )?),
+            Some(root_dir) => Some(run_in_dir(&root_dir, &cmd, &mut opts, run_data.image)?),
+        },
+    };
+
+    if !opts.detach {
+        Ok(id.unwrap_or("".to_owned()))
+    } else {
+        Ok("".to_owned())
     }
-    let cmd = run_data.cmd.as_slice();
-
-    run_container(&opts, cmd)?;
-
-    Ok(())
 }
