@@ -56,15 +56,14 @@ unsafe fn container_main(opts: &Options, cmd: &[String], tx: OwnedFd, rx: OwnedF
     } else {
         (Stdio::inherit(), Stdio::inherit(), Stdio::inherit())
     };
-    if opts.isolate_net {
-        Command::new(&cmd[0])
-            .args(&cmd[1..])
-            .stdin(stdio_mode.0)
-            .stdout(stdio_mode.1)
-            .stderr(stdio_mode.2)
-            .output()
-            .with_context(|| "[container] Could not run entry command")?;
-    }
+
+    Command::new(&cmd[0])
+        .args(&cmd[1..])
+        .stdin(stdio_mode.0)
+        .stdout(stdio_mode.1)
+        .stderr(stdio_mode.2)
+        .output()
+        .with_context(|| "[container] Could not run entry command")?;
 
     tx.write_all(b"finish\n")
         .with_context(|| "[container] Could not send finish message to setup")?;
